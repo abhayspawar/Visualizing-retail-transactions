@@ -1,0 +1,636 @@
+---
+title: "Shopper's Analysis"
+author: "Siths of Viz."
+date: "20 April 2017"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r libraries, echo=FALSE, warning=FALSE,message=FALSE}
+   library(vcd)
+   library(ggplot2)
+   library(lawstat)
+   library(MASS)
+   library(gridExtra)
+   library(grid) 
+   library(lattice)
+   library(gridGraphics)
+   library(GGally)
+   library(extracat)
+   library(viridis)
+   library(dplyr)
+   library(tidyr)
+   library(ggplot2)
+   library(mi)
+   library(betareg)
+   library(lubridate)
+   library(tibble)
+   library(reshape2)
+   library(rgl)
+   library(arules)
+   library(stringr)
+  
+```
+
+## Introduction
+
+Last semester, we had competed in a hackathon organized by Walmart who provided us anonymous data of transactions in different branches of their stores. Teams were to make practical inferences from this data and present their results. We enjoyed this hack a lot, and managed to bag the fourth place. Naturally, we looked for similar publicly available data and chanced upon a massive dataset provided in a kaggle competition. The data can be found [here](https://www.kaggle.com/c/acquire-valued-shoppers-challenge/data). 
+
+**Data**: The data is from Kaggle's Acquire Valued Shoppers Challenge ([link](https://www.kaggle.com/c/acquire-valued-shoppers-challenge/data)). The challenge's aim was to predict which customers will respond to a marketing offer. Following are the datasets made available for the competition. We are directly quoting the data explanation page from the competition here.:
+
+1. **trainHistory.csv** - contains the incentive offered to each customer and information about the behavioral response to the offer. Following are the fields present in this data:
+
+**id** - A unique id representing a customer
+**chain** - An integer representing a store chain
+**offer** - An id representing a certain offer
+**market** - An id representing a geographical region
+**repeattrips** - The number of times the customer made a repeat purchase
+**repeater** - A boolean, equal to repeattrips > 0
+**offerdate** - The date a customer received the offer
+
+2. **transactions.csv**: contains transaction history for all customers for a period of at least 1 year prior to their offered incentive. Each row in this data corresponds to a product that a customer bought. Following are the fields present in this data:
+
+id - see above
+
+chain - see above
+
+dept - An aggregate grouping of the Category (e.g. water)
+
+category - The product category (e.g. sparkling water)
+
+company - An id of the company that sells the item
+
+brand - An id of the brand to which the item belongs
+
+date - The date of purchase
+
+productsize - The amount of the product purchase (e.g. 16 oz of water)
+
+productmeasure - The units of the product purchase (e.g. ounces)
+
+purchasequantity - The number of units purchased
+
+purchaseamount - The dollar amount of the purchase
+
+
+3. **offers.csv** - contains information about the offers. Following are the fields present in this data:
+
+**offer** - see above
+
+**category** - see above
+
+**quantity** - The number of units one must purchase to get the discount
+
+**company** - see above
+
+**offervalue** - The dollar value of the offer
+
+**brand** - see above
+
+
+**Questions we want to study**
+
+We looked at this data from perspective of understanding how well the offers are working. Following are the broad questions we tried to answer:  
+  
+1. What kind of customer are more likely to respond to an offer?  
+2. Are there any groups within the customers which act differently from each other and how do we target them with the right offer?  
+3. Which offer products are customers more likely to respond?
+
+## 2. Team
+
+The entire team was involved at every level of the project. Following are the contribution of each member:
+
+**Abhay S. Pawar** : Handled the intitial data extraction part to reduce the size of the data and bring it into a manageable form. Worked on getting the response rate plots and analysis of the clusters. Was also responsible for generating ideas.
+
+**Vijay Balaji** : Handles the back end coding,data assimilation and integration of code from different platforms/languages. Will work on the action items provided through the exploratory analysis, and perform modeling.
+
+**Vinayak Bakshi** : Focus on final visualizations, end to end delivery of objectives. Ultimate conclusions will be drawn as communicated by the analysis and models. Will also handle the presentation.
+
+## 3. Analysis of Data Quality
+
+```{r Data Importing}
+transactions_data <- read.csv("data_1yr.csv",na.strings = '')
+train_history <- read.csv("trainHistory.csv",na.strings = '')
+offers = read.csv("offers.csv",header=TRUE)
+```
+
+
+```{r Summarise data}
+
+summary(transactions_data)
+summary(train_history)
+```
+
+### Missing Values:
+* Product Measure in transactions has 45,132 missing values whereas all other variables have 100% fill rate.
+* We aren't using the variable product measure because different products have different measure (oz, lb, etc.). 
+```{r,fig.width=12,fig.length=10}
+visna(transactions_data)
+```
+
+
+
+## 4. Executive Summary
+In our project we analyse retail transactions data and answer some important questions about customer behavior and their reponse to promotions. We also look at specific products on which offers are given and its impact on sales
+
+We first analysed Month on Month trends of basic KPIs such as **Sales Volume, Total Revenue, Customer Base** with time. We noticed that these metrics do not change drastically over the year and are not effected by seasonality. We then evaluate customer engagement metrics such as **average number of transactions, average basket value, average number of trips made, etc.** to analyse customer behavior. We cluster the customers into groups based on these metrics using K-means clustering. 
+
+We studied the behavior of these customer groups and their response to offers using simple plots.
+
+#### graph 1: 
+
+The brands,categories,companies,departments are the number of unique occurences of these features.
+
+
+
+![Metrics by cluster](C:/Users/vijay/Desktop/edav/graph1.png)
+
+#### graph 2: Response rate plots
+
+![Response Rates plots](C:/Users/vijay/Desktop/edav/graph2.png)
+
+We observe that response rate increases when these metric values increase except for daydiff which is how long ago the customer came to the store. This is expected as these metrics define engagement levels of the customer groups. Therefore higher the engagement higher is the response rate. Hence to maximize the response rates, the chain should provide promotions to customers who have high level of engagement with the chain.
+
+
+#### graph 3: 
+![Response Rates of products](C:/Users/vijay/Desktop/edav/graph3.png)
+
+
+We observe that popular products have high response rates to offers. Eg. totalquantity plot above shows response rate vs. total quantities sold of the offer product. We see that higher the total quantities sold, higher is the response rate.
+
+
+We also created a feature which tells us if a customer has previously bought a product of the same brand/company/category of that on which the promotion is given, the response rate is high. This tells us that the chain should target promotions to customers based on what they purchased before.
+
+
+#### graph 4: 
+![Total product amount for brands,categories,companies,products on which offers are given](C:/Users/vijay/Desktop/edav/graph4.png)
+
+The plot shows two bins: >0 and 0.
+
+>0 implies the customer has bought the offer brand before if we are looking at the brand plot.
+
+
+## 5. Main Analysis
+###Some Numbers about the data
+Since the transactions data was 23GB in size we had to reduce the size of this data to make it easy to work with. We took transactions only from chain=4 and between May 2012 to April 2013 (1 year). Henceforth, we are referring to this subset of transactions data as transaction data itself. We did this subsetting using python as it is much faster than R for such tasks. Here's the code on Github. Following are some details about the final data used for the analysis:
+
+Particulars   | Details
+------------- | -------------
+Total rows in the transactions data   | 3.34 Million
+Total customers present in the transactions data   | 4133
+Total customers present in the transactions data who were given some offer   | 1753
+Total unique brands | 4909
+Total unique categories | 771
+Total unique companies | 3995
+Total unique departments | 82
+Total unique products | 10460
+Total sales in transactions | $4.67 Million
+
+Since, there is no product_id in the data, we are assuming a unique product to be combination department, category, company and brand.
+
+From the number of rows in transactions data, we can clearly see that this is a huge dataset with rich information. The actual transactions data (23GB) contains about 1.1 Billion rows.
+
+###Month on Month trends
+
+We initially explored the data to get an understanding of the data. We looked at how sales(volume and amount) and number of customers vary in each month. We found that more or less these quantitites remain same in each month. We see that these quantities drop a little in April'13. We aren't sure why this is happening, but one cause could be incomplete data. Since, April'13 is the last month for which transactions are given, probably not all transactions are present from April'13.
+
+```{r,fig.width= 10,fig.height=6}
+### Sales volume and amount with time
+transactions_data$Month_Yr <-format(as.Date(transactions_data$date), "%Y-%m")
+numproducts = transactions_data %>% group_by(Month_Yr) %>% summarise(customers = length(id))
+colnames(numproducts) = c("month","numproducts")
+
+ggplot(numproducts) + geom_bar(aes(x=month,y=numproducts),fill="darkblue",stat="identity")+ xlab("month") + 
+  ylab("Volume of Sales") 
+
+### Number of unique customers
+customers = transactions_data %>% group_by(Month_Yr) %>% summarise(customers = length(unique(id)))
+colnames(customers) = c("month","numcustomers")
+
+ggplot(customers) + geom_bar(aes(x=month,y=numcustomers),fill="darkblue",stat="identity")+ xlab("month") + 
+  ylab("numcustomers") 
+
+### Total Revenue in Sales by Month
+
+prodamt = transactions_data %>% group_by(Month_Yr) %>% summarise(prod = length(id))
+colnames(prodamt) = c("month","prodamounts")
+
+ggplot(prodamt) + geom_bar(aes(x=month,y=prodamounts),fill="darkblue",stat="identity")+ xlab("month") + 
+  ylab("product amount") 
+```
+
+### Customer Feature Creation
+This is the most important part of our analysis. Since, we want to understand what type of customers are more responsive to offers, we created different features for each customer. We then analysed how response rates vary over these features. Following are the list of features that we created. All the features are created using aggregating the transactions data:
+
+1. Trips: Number of times a customer came to a store. We assumed that a customer comes to store not more than once a day and used date in transactions to find number of trips
+
+2. Products bought: Total products bought in 1 year by a customer
+
+3. Cost of products bought: Total cost of all the products bought in 1 year by a customer
+
+4. Average product cost per trip: Cost of products bought divided by trips
+
+5. Average products per trip: Products bought by trips
+
+6. How long ago he came to the store: in days
+
+7. Number of unique categories bought in 1 year
+
+8. Number of unique departments bought from in 1 year
+
+9. Number of unique companies bought in 1 year
+
+10. Number of unique brands bought in 1 year
+
+```{r}
+trips = transactions_data %>% group_by(id) %>% summarise(trips = length(unique(date)))
+
+cust_data = data.frame(trips)
+
+cust_data['numberofproductsbought'] = (transactions_data %>% group_by(id) %>% summarise(products = length(id)))[2]
+
+cust_data['totalproductamount'] = (transactions_data %>% group_by(id) %>% summarise(totalproducts = sum(productamount)))[2]
+
+cust_data['avgproductamount'] = (transactions_data %>% group_by(id) %>% summarise(avgprodamount = sum(productamount)/length(unique(date))))[2]
+
+cust_data['avgproductsboughtinatrip'] = (transactions_data %>% group_by(id) %>% summarise(avgprods = length(id)/length(unique(date))))[2]
+
+transactions_data$date = as.Date(transactions_data$date)
+
+cust_data['datelastvisited'] = (transactions_data %>% group_by(id) %>% summarise(lastdate = max(date)))[2]
+
+cust_data['category'] = (transactions_data %>% group_by(id) %>% summarise(category = length(unique(category))))[2]
+
+cust_data['brand'] = (transactions_data %>% group_by(id) %>% summarise(brand = length(unique(brand))))[2]
+
+cust_data['company'] = (transactions_data %>% group_by(id) %>% summarise(company = length(unique(company))))[2]
+
+cust_data['dept'] = (transactions_data %>% group_by(id) %>% summarise(dept = length(unique(dept))))[2]
+
+#df$lastdate = as.Date(df$lastdate)
+cust_data['daysdifference'] = max(cust_data$datelastvisited) - cust_data$datelastvisited
+
+transactions_w_hist = merge(cust_data,train_history,by="id")
+```
+### Product Level Analysis
+
+For this, we created features for each product. The idea is to see how response rate changes wrt these product features. Since, there is no product id in data, we are using combination of category, company and brand as product id. 
+```{r}
+prods = transactions_data
+prods['code'] = paste0(prods$company,prods$brand,prods$category)
+totalquantity = prods %>% group_by(code) %>% summarise(totalquantity = sum(productquantity))
+colnames(totalquantity) = c("code","totalquantity")
+productlevel   = data.frame(totalquantity)
+productlevel['uniquecusts'] = (prods %>% group_by(code) %>% summarise(uniquecusts = length(unique(id))))[2]
+productlevel['avgunitprice'] = (prods %>% group_by(code) %>% summarise(avgunitprice = mean(sum(productamount)/sum(productquantity))))[2]
+
+```
+### Identifying the kind of retail chain 
+
+We looked at the following to identify the type of chain we are working with.
+
+* Distribution unit price of products
+* Average purchase amount per transaction
+* Unique product measures
+
+```{r}
+unique(transactions_data$productmeasure)
+ggplot(productlevel) + geom_histogram(aes(x=avgunitprice),bins = 50) + xlim(c(0,20))
+```
+* More than 95% of the products have unit price within 20 USD.
+* We are probably looking at a grocery store chain that sells low range, everyday use products
+
+
+### Distribution of customer features:
+We looked at how these features are distributed. They are more or less normally distributed. Some of them have skewed distribution.
+
+```{r, fig.width=10,fig.length=12,message=FALSE}
+
+cust_dataM=gather(cust_data,key = feature , value = value, -id)
+
+ggplot(cust_dataM,aes(value,fill = feature)) + geom_histogram(stat = "bin") + facet_wrap(~feature, scales = "free")
+
+```
+
+### Scatter-plot matrix
+
+```{r, fig.height=15,fig.width=15}
+matrix_plot <- function(data, mapping, ...){
+  p <- ggplot(data = data, mapping = mapping) + geom_point(alpha = 0.5) + geom_smooth(method=lm, fill="blue", color="blue", ...)
+}
+cust_data_plot <- cust_data[c(2:6,8:11)]
+ggpairs(cust_data,columns = 2:9, lower = list(continuous = matrix_plot))
+```
+Observations:
+
+* Number of trips a customer makes to the store is positively correlated with the amount of sales and number of products 
+
+* Number of products bought is positively correlated with number of categories and brands from which the customer buys the products. This is expected as customers who buy more products tend to try different brands as well.
+
+### Response Rate wrt customer features
+Here we are trying to understand what the response rates look like wrt to each customer feature. We can see that all the features have some trend with respect to response rates. Except daydiff, for all the features the response rate increases when the feature value increases. This is expected as these other features imply how much engaged the customer with this retail chain. Trend for monthdiff looks opposite because higher value implies lower engagement.
+
+```{r fig.height=15}
+data_offer = transactions_w_hist
+data_offer = data_offer[-7]
+data_offer$offer = as.character(data_offer$offer)
+data_offer = as_tibble(data_offer)
+
+data_offer$response=data_offer$trips
+for (i in 1:length(data_offer$id)){
+  if (data_offer$repeater[i]=='t'){
+    data_offer$response[i]=1
+  } else {
+    data_offer$response[i]=0
+  }
+}
+
+
+for (i in c(c(2:11),c(13))){
+  sub=data_offer[,c(i,18)]
+  if (typeof(unlist(sub[,1]))=='character'){
+    final=aggregate(sub[,2],by=sub[,1],FUN=sum)
+    counts=aggregate(sub[,2],by=sub[,1],FUN=length)
+    response_rate=final$response/counts$response
+    var_data=data.frame(unlist(final$offer))
+    colnames(var_data)="Category"
+    var_data$response_rate=response_rate
+    var_data$variable=colnames(data_offer)[i]
+  } else {
+    sub$grps=cut_number(as.numeric(unlist(sub[,1])),6)
+    sub=sub[,c(2,3)]
+    sub$grps=as.character(sub$grps)
+    final=aggregate(sub[,1],by=list(Category=sub$grps),FUN=sum)
+    counts=aggregate(sub[,1],by=list(Category=sub$grps),FUN=length)
+    
+    final$response_rate=final$response/counts$response
+    final$number=final$response_rate
+    for (j in 1:length(final$response_rate)){
+      final$number[j]=as.numeric(substr(substr(final$Category[j],2,nchar(final$Category[j])-1),1,regexpr(pattern=',',final$Category[j])-2))
+    }
+    
+    final$Category <- factor(final$Category, levels = final$Category[order(final$number)])
+    final$variable=colnames(data_offer)[i]
+    var_data=final[,c(1,3,5)]
+  }
+  if (i==2){
+    final_data=var_data
+  } else {
+    final_data=rbind(final_data,var_data)
+  }
+  
+  var_names=c(colnames(data_offer)[2:11],colnames(data_offer)[13])
+  
+}
+
+ggplot(final_data,aes(x=Category,y=response_rate)) + geom_point()+facet_wrap(~variable, scale='free')+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+```
+
+```{r,fig.width=12,fig.height=10}
+ggplot(final_data,aes(x=Category,y=response_rate)) + geom_point()+facet_wrap(~variable, scale='free')+ theme(axis.text.x = element_text(angle = 90, hjust = 1))
+
+#ggplot(final_data,aes(x=Category,y=response_rate)) + geom_point() + facet_wrap(~variable,scales = "free")
+
+```
+
+
+### Clustering 
+Now, that we know how response rates vary with features, we tried to find clusters within these customers. This would give us an idea about different types customers and how they behave. We then plotted the average values of features of customers within each cluster. 
+
+```{r, fig.height=10,fig.width=15}
+data_offer$daysdifference <- as.integer(data_offer$daysdifference)
+customer_data_clustering <- data_offer[2:11]
+
+customer_data_clustering_std<-data.frame(apply(customer_data_clustering,2,function(x) (x-mean(x))/sd(x)))
+
+# K-Means clustering
+set.seed(2)
+k.customer_clusters <- kmeans(customer_data_clustering_std,centers = 5)
+customer_data_clustering$response<-data_offer$response
+customer_data_clustering$cluster <- k.customer_clusters$cluster
+mean_values=aggregate(customer_data_clustering,by=list(customer_data_clustering$cluster),FUN=mean)
+
+mean_values$cluster <- factor(mean_values$cluster, levels = mean_values$cluster[order(mean_values$response)])
+
+mean_values_tidy <- melt(mean_values, id=c('cluster'))
+
+```
+
+```{r}
+
+# PCA for visualizing clusters
+pc <- princomp(customer_data_clustering, cor=TRUE, scores=TRUE)
+plot(pc,type="lines")
+
+PC_w_clusters<-data.frame(cbind(pc$scores[,1],pc$scores[,2],customer_data_clustering$cluster))
+
+colnames(PC_w_clusters)<-c("PC1","PC2","cluster")
+
+ggplot(data=PC_w_clusters,aes(x=PC1,y=PC2)) + geom_point(aes(color = cluster))
+
+```
+
+For these 5 clusters, we saw their response rates. In the figure below, the clusters are ordered by their response rates. We can see that there is clear trend in these. Cluster 1 has the lowest response rate and also the lowest values for customer feature except daydiff. We can infer that these clusters contain customers with different levels of engagement with the retail chain. Cluster 1 being the lowest and 5 being the highest.
+
+```{r}
+ggplot(data=mean_values_tidy[mean_values_tidy$variable!='Group.1',],aes(x=cluster,y=value))+geom_point()+facet_wrap(~variable,scales="free")
+
+```
+
+
+Then we looked at what the response rates look like wrt features in each cluster. We don't see any trend here as before because each cluster largely contains similar customers.
+
+```{r fig.height=10,fig.width=15}
+#Feature trends in clusters:
+
+trends <- function(input_data,indices,res_col,grps1,type){
+  for (i in indices){
+    sub=input_data[,c(i,res_col)]
+    if (typeof(unlist(sub[,1]))=='character'){
+      final=aggregate(sub[,2],by=sub[,1],FUN=sum)
+      counts=aggregate(sub[,2],by=sub[,1],FUN=length)
+      response_rate=final$response/counts$response
+      var_data=data.frame(unlist(final$offer))
+      colnames(var_data)="Category"
+      var_data$response_rate=response_rate
+      var_data$variable=colnames(data_offer)[i]
+    } else {
+      if (type!='binary'){
+        sub$grps=cut_number(as.numeric(unlist(sub[,1])),grps1)
+      } else {
+        sub=data.frame(sub)
+        sub$grps=as.character(sub[,1])
+        sub$grps[sub[,1]>0]=">0"
+        sub$grps[sub[,1]==0]="0"
+        sub=as_tibble(sub)
+      }
+      sub=sub[,c(2,3)]
+      
+      sub$grps=as.character(sub$grps)
+      final=aggregate(sub[,1],by=list(Category=sub$grps),FUN=sum)
+      counts=aggregate(sub[,1],by=list(Category=sub$grps),FUN=length)
+      
+      final$response_rate=final$response/counts$response
+      final$number=final$response_rate
+      for (j in 1:length(final$response_rate)){
+        final$number[j]=as.numeric(substr(substr(final$Category[j],2,nchar(final$Category[j])-1),1,regexpr(pattern=',',final$Category[j])-2))
+      }
+      
+      final$Category <- factor(final$Category, levels = final$Category[order(final$number)])
+      final$variable=colnames(input_data)[i]
+      var_data=final[,c(1,3,5)]
+    }
+    if (i==2){
+    final_data=var_data
+    } else {
+    final_data=rbind(final_data,var_data)
+    }
+  }
+  var_names=c(colnames(input_data)[indices])
+  return(final_data)
+}
+
+for (i in 1:1){
+  cluster_data_subset=customer_data_clustering[customer_data_clustering$cluster==i,]
+  cluster_data_subset=cluster_data_subset[,-12]
+  #train_history$offer=as.character(train_history$offer)
+  #cluster_data_subset_off=merge(cluster_data_subset,train_history[c(1,3)],all.x=TRUE)
+  plots_data=trends(as_tibble(cluster_data_subset),c(1:10),11,6,'some')
+  gg=ggplot(plots_data,aes(x=Category,y=response_rate)) + geom_point()+facet_wrap(~variable, scale='free')+ theme(axis.text.x = element_text(angle = 90, hjust = 1))+ggtitle(paste0('Response rates for cluster ',i))+xlab("Bins for the features")
+  print(gg)
+}
+
+```
+
+Since, customers within a cluster are similar to each other, the retail chain can give same type of offers to customers within each cluster. Since, we know that customers in cluster 1 are less engaged, it would also make sense to give these customers more offers and offers of high value. 
+
+To understand which offers should be given to which cluster, we looked at response rate for different offers in each cluster. 
+
+After looking at this data from customer perspective, we shifted gears and started looking at it from the product perspective. Till now we have seen which customers are more likely to respond. In this part, we look at which offer products are more likely to be responded to by customers.
+
+
+
+#### Response Rate by features
+The plots below show response rate wrt features of respective offer product. 
+
+```{r}
+offers$code = paste0(offers$company,offers$brand,offers$category)
+offerresponse = merge(offers,final_data,by.x = "offer",by.y ="Category")
+offerprod = merge(offerresponse,productlevel,by="code")
+prod_response<-gather(offerprod,key = feature , value = value,-code,-offer,-category,-quantity,-company,-offervalue,-brand,-response_rate,-variable)
+ggplot(prod_response) + geom_point(aes(x=value,y=response_rate)) +facet_grid(~feature,scales = "free")+ ylab("response rate") +ggtitle("Variation in Response Rate with product metrics")
+
+```
+
+**Observation:**
+
+* When the average unit price of a product is moderate, a high response rate is obtained but for the product with high unit price the impact of prpmotion decreases.
+
+* High response rate is associated with number of unique customers that bought the product. This is because popular products have a high response rate when given a promotion.
+
+
+
+#### Combined Customer and product analysis 
+
+Till now we looked at customer features and product features seperately. But, we can also look at features created using customer as well as product information. We created following features:
+1. # of times the customer bought the offer brand before the offer
+2. # of times the customer bought the offer company before the offer
+3. # of times the customer bought the offer category before the offer
+4. # of times the customer bought the offer product before the offer
+
+```{r}
+trainfiltered = train_history %>% filter(id %in% transactions_data$id)
+trainoffers = merge(trainfiltered,offers,by="offer")
+
+databrand = merge(trainoffers,transactions_data,by=c("id","brand"),all.x=TRUE)
+offerbrand = databrand %>% group_by(offer,id,brand) %>% summarise(totalbrand = sum(productquantity))
+offer_prod=offerbrand[c(2,4)]
+
+datacat = merge(trainoffers,transactions_data,by=c("id","category"),all.x=TRUE)
+offercat = datacat %>% group_by(offer,id,category) %>% summarise(totalcat = sum(productquantity))
+offer_prod$totalcat=offercat$totalcat
+
+datacomp = merge(trainoffers,transactions_data,by=c("id","company"),all.x=TRUE)
+offercomp = datacomp %>% group_by(offer,id,company) %>% summarise(totalcomp = sum(productquantity))
+offer_prod$totalcomp=offercomp$totalcomp
+
+dataprod = merge(trainoffers,transactions_data,by = c("id","company","brand","category"),all.x=TRUE)
+offerprod = dataprod %>% group_by(offer,id,company,brand,category) %>% summarise(totalprod = sum(productquantity))
+offer_prod$totalprod=offerprod$totalprod
+
+offer_prod[is.na(offer_prod)] = 0
+res_data=data_offer[c(1,18)]
+offer_prod_final=merge(offer_prod,res_data,by="id",all.x = TRUE)
+#input_data,indices,res_col
+
+
+cluster_res_data1=trends(as_tibble(offer_prod_final),c(2,3,4,5),6,2,'binary')
+
+```
+Following are the response rates wrt to these features. 0 implies that the customer never bought the offer brand/company/category/product. >0 implies that he bought it. We can see in the plots that customers in >0 bin have higher response rate. Thus, if the customer has bought products from the brand/company/category of offer product, the response rate is higher. Response rate is also higher if he has bought the offer product previously.
+```{r}
+ggplot(data=cluster_res_data1)+geom_point(aes(x=Category,y=response_rate))+facet_wrap(~variable)
+```
+
+
+#### Associated products
+Next we looked at what happens when the customer has bought brands which are associated with the offer product brand. We used brand as it is the lowest in the hieararchy to identify a product. Associated brands are those which are more likely to be bought if a customer has bought the offer brand. We used the apriori package for this purpose.
+
+```{r,include=FALSE}
+aprioridata = data.frame(paste0(transactions_data$id,transactions_data$date))
+aprioridata$brand = transactions_data$brand
+colnames(aprioridata) = c("id","brand")
+( trans <- as(split(aprioridata$brand, aprioridata$id), "transactions") )
+
+rules = apriori(trans,parameter = list(supp=0.001,conf=0.1,maxlen=2))
+
+rulesdf = data.frame(inspect(rules))
+
+library(stringr)
+
+rulesdf$lhs = rulesdf$lhs %>% str_replace_all("\\{|\\}","")
+rulesdf$rhs = rulesdf$rhs %>% str_replace_all("\\{|\\}","")
+
+rulesdffiltered = rulesdf[rulesdf$lhs %in% offers$brand,]
+rulesdffiltered = rulesdffiltered %>% filter(lift>1.5)
+
+rulestrain = merge(trainoffers,rulesdffiltered,by.x = "brand",by.y = "lhs",all.x=TRUE)
+rulestrainjoined = merge(rulestrain,transactions_data,by.x = c("id","rhs"),by.y = c("id","brand"),all.x=TRUE)
+
+rulesaggr = rulestrainjoined %>% group_by(id) %>% summarise(sumprodqty = sum(productquantity))
+rulesaggr[is.na(rulesaggr)] = 0
+rulesaggr_final = merge(rulesaggr,res_data,by="id",all.x = TRUE)
+
+associated=trends(as_tibble(rulesaggr_final),c(2),3,6,'binary')
+
+```
+The plot below shows the response rate when the customer has bought associated brands before. The results of this are the opposite of what we expected. Customers who have bought associated brands have lower response rate.
+```{r}
+ggplot(data=associated)+geom_point(aes(x=Category,y=response_rate))+facet_wrap(~variable)
+
+```
+
+
+## 6. Conclusion
+
+* The overall Sales Volume, Revenue and Size of Customer base for the chain do not vary during the year except during November and December (Holiday Months)
+
+* The response rate of customers increases with the engagement level. Customers with high engagement have high response rates
+
+* We got clusters with customers of different engagement level. There are no trends for features for cluster. 
+
+* If the customer has bought the offer product before, he is more likely to respond. Same is true for offer brand, company and category
+
+
+** Limitations **
+
+* Promotions are given only on few products which is why we do not have many data points to analyse trend of response rates. 
+
+* Product id s are not given to us therefore we create product ids by concatenating other ids provided.
+
+* Transaction IDs are not given. We assume that a customer makes one transaction in one day.
+
